@@ -2,12 +2,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # See: https://spdx.org/licenses/
 import typing as ty
-from abc import ABC, abstractmethod
 
 import numpy as np
 
-from lava.magma.compiler.channels.pypychannel import CspRecvPort, CspSendPort, \
-    CspSelector
+from lava.magma.compiler.channels.pypychannel import CspSelector
 from lava.magma.core.sync.protocol import AbstractSyncProtocol
 from lava.magma.runtime.mgmt_token_enums import (
     enum_to_np,
@@ -15,46 +13,16 @@ from lava.magma.runtime.mgmt_token_enums import (
     MGMT_RESPONSE,
     MGMT_COMMAND,
 )
+from lava.magma.runtime.runtime_services.interfaces import \
+    AbstractRuntimeService
+from lava.magma.runtime.runtime_services.enums import \
+    LoihiVersion
 
-
-class AbstractRuntimeService(ABC):
-    def __init__(self, protocol):
-        self.protocol: ty.Optional[AbstractSyncProtocol] = protocol
-
-        self.runtime_service_id: ty.Optional[int] = None
-
-        self.runtime_to_service: ty.Optional[CspRecvPort] = None
-        self.service_to_runtime: ty.Optional[CspSendPort] = None
-
-        self.model_ids: ty.List[int] = []
-
-        self.service_to_process: ty.Iterable[CspSendPort] = []
-        self.process_to_service: ty.Iterable[CspRecvPort] = []
-
-    def __repr__(self):
-        return f"Synchronizer : {self.__class__}, \
-                 RuntimeServiceId : {self.runtime_service_id}, \
-                 Protocol: {self.protocol}"
-
-    def start(self):
-        self.runtime_to_service.start()
-        self.service_to_runtime.start()
-        for i in range(len(self.service_to_process)):
-            self.service_to_process[i].start()
-            self.process_to_service[i].start()
-        self.run()
-
-    @abstractmethod
-    def run(self):
+try:
+    from nxsdk.driver.executor import Executor as NxExecutor
+except ImportError:
+    class NxExecutor:
         pass
-
-    def join(self):
-        self.runtime_to_service.join()
-        self.service_to_runtime.join()
-
-        for i in range(len(self.service_to_process)):
-            self.service_to_process[i].join()
-            self.process_to_service[i].join()
 
 
 class PyRuntimeService(AbstractRuntimeService):
@@ -62,6 +30,10 @@ class PyRuntimeService(AbstractRuntimeService):
 
 
 class CRuntimeService(AbstractRuntimeService):
+    pass
+
+
+class NcRuntimeService(AbstractRuntimeService):
     pass
 
 
@@ -295,3 +267,81 @@ class AsyncPyRuntimeService(PyRuntimeService):
                     if not enum_equal(rsp, MGMT_RESPONSE.DONE):
                         raise ValueError(f"Wrong Response Received : {rsp}")
                 self.service_to_runtime.send(MGMT_RESPONSE.DONE)
+
+
+class NxSDKRuntimeService(NcRuntimeService):
+    """NxSDK RuntimeService that implements NxCore SyncProtocol.
+
+    The NxSDKRuntimeService is a wrapper around NxCore that allows
+    interaction with Loihi through NxCore API and GRPC communication
+    channels to Loihi.
+
+    Parameters
+    ----------
+    protocol: ty.Type[LoihiProtocol]
+              Communication protocol used by NxSDKRuntimeService
+    nx_executor: NxExecutor
+                 Executor object from NxSDK that drives
+                 state transition in Loihi
+    loihi_version: LoihiVersion
+                   Version of Loihi Chip to use, N2 or N3
+    """
+
+    def __init__(self,
+                 protocol: ty.Type[AbstractSyncProtocol],
+                 nx_executor: NxExecutor,
+                 loihi_version: LoihiVersion = LoihiVersion.N3):
+        super(NxSDKRuntimeService, self).__init__(
+            protocol=protocol
+        )
+        self.nx_executor = nx_executor
+
+        if loihi_version == LoihiVersion.N3:
+            from nxsdk.arch.n3b.n3board import N3Board
+            self.nx_executor.board = N3Board(id=0)
+        elif loihi_version == LoihiVersion.N2:          
+            from nxsdk.arch.n2a.n2board import N2Board
+            self.nx_executor.board = N2Board(id=0)
+        else:
+            raise ValueError('Unsupported Loihi version ' +
+                             'used in board selection')
+
+        self.nx_executor.board.energyTimeMonitor.executor = self
+
+    def __repr__(self):
+        return f"Synchronizer : {self.__class__}, \
+                 RuntimeServiceId : {self.runtime_service_id}, \
+                 Protocol: {self.protocol}"
+
+    def start(self):
+        self.runtime_to_service.start()
+        self.service_to_runtime.start()
+        for i in range(len(self.service_to_process)):
+            self.service_to_process[i].start()
+            self.process_to_service[i].start()
+        self.run()
+
+    def run(self, num_steps: int, async_: bool = False):
+        self.nx_executor.board.run(num_steps, aSync=async_)
+
+    def join(self):
+        self.runtime_to_service.join()
+        self.service_to_runtime.join()
+
+        for i in range(len(self.service_to_process)):
+            self.service_to_process[i].join()
+            self.process_to_service[i].join()
+
+
+""" We need to get a board at some point:
+def _get_board(self, main_process):
+        backend = main_process.backend
+        if backend == Backend.N2:
+            from nxsdk.arch.n2a.n2board import N2Board
+            return N2Board(id=0)
+        elif backend == Backend.N3:
+            from nxsdk.arch.n3b.n3board import N3Board
+            return N3Board(id=0)
+        else:
+            raise ValueError('Unsupported backend')
+"""

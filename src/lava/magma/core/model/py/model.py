@@ -177,7 +177,8 @@ class PyLoihiProcessModel(AbstractPyProcessModel):
                 for var_port in self.var_ports:
                     for csp_port in var_port.csp_ports:
                         if isinstance(csp_port, CspRecvPort):
-                            channel_actions.append((csp_port, lambda: var_port))
+                            channel_actions.append(
+                                (csp_port, lambda: var_port))
             action = selector.select(*channel_actions)
 
     def _handle_get_var(self):

@@ -8,10 +8,17 @@ import numpy as np
 from dataclasses import dataclass
 
 from lava.magma.core.sync.protocol import AbstractSyncProtocol
+from lava.magma.core.sync.protocols.loihi_protocol import LoihiProtocol
 from lava.magma.runtime.message_infrastructure.message_infrastructure_interface\
     import MessageInfrastructureInterface
-from lava.magma.runtime.runtime_service import PyRuntimeService, \
-    AbstractRuntimeService
+from lava.magma.runtime.runtime_services.enums import LoihiVersion
+from lava.magma.runtime.runtime_services.runtime_service import (
+    NxSDKRuntimeService,
+    PyRuntimeService,
+    AbstractRuntimeService,
+    NcRuntimeService,
+    NxSDKRuntimeService
+)
 
 if ty.TYPE_CHECKING:
     from lava.magma.core.process.process import AbstractProcess
@@ -37,6 +44,16 @@ from lava.magma.core.model.py.ports import (
 )
 from lava.magma.compiler.channels.interfaces import AbstractCspPort, Channel, \
     ChannelType
+
+try:
+    from nxsdk.driver.executor import Executor as NxExecutor
+    import nxsdk.driver.protobuf.executor_pb2 as executor_pb2
+except ImportError:
+    class NxExecutor:
+        pass
+
+    class executor_pb2:
+        pass
 
 
 class PyProcessBuilder(AbstractProcessBuilder):
@@ -495,6 +512,90 @@ class RuntimeServiceBuilder(AbstractRuntimeServiceBuilder):
         PyRuntimeService
         """
         rs = self.rs_class(protocol=self.sync_protocol)
+        rs.runtime_service_id = self._runtime_service_id
+        rs.model_ids = self._model_ids
+
+        for port in self.csp_proc_send_port.values():
+            if "service_to_process" in port.name:
+                rs.service_to_process.append(port)
+
+        for port in self.csp_proc_recv_port.values():
+            if "process_to_service" in port.name:
+                rs.process_to_service.append(port)
+
+        for port in self.csp_send_port.values():
+            if "service_to_runtime" in port.name:
+                rs.service_to_runtime = port
+
+        for port in self.csp_recv_port.values():
+            if "runtime_to_service" in port.name:
+                rs.runtime_to_service = port
+
+        return rs
+
+
+class NxSDKRuntimeServiceBuilder(AbstractRuntimeServiceBuilder):
+    """NxSDK Run Time Service Builder"""
+
+    def __init__(
+        self,
+        rs_class: ty.Type[NcRuntimeService],
+        protocol: ty.Type[LoihiProtocol],
+        runtime_service_id: int,
+        model_ids: ty.List[int],
+    ):
+        super(NxSDKRuntimeServiceBuilder, self).__init__(rs_class, protocol)
+        self._runtime_service_id = runtime_service_id
+        self._model_ids: ty.List[int] = model_ids
+        self.csp_send_port: ty.Dict[str, CspSendPort] = {}
+        self.csp_recv_port: ty.Dict[str, CspRecvPort] = {}
+        self.csp_proc_send_port: ty.Dict[str, CspSendPort] = {}
+        self.csp_proc_recv_port: ty.Dict[str, CspRecvPort] = {}
+
+    @property
+    def runtime_service_id(self):
+        return self._runtime_service_id
+
+    def set_csp_ports(self, csp_ports: ty.List[AbstractCspPort]):
+        """Set CSP Ports
+
+        Parameters
+        ----------
+        csp_ports : ty.List[AbstractCspPort]
+
+        """
+        for port in csp_ports:
+            if isinstance(port, CspSendPort):
+                self.csp_send_port.update({port.name: port})
+            if isinstance(port, CspRecvPort):
+                self.csp_recv_port.update({port.name: port})
+
+    def set_csp_proc_ports(self, csp_ports: ty.List[AbstractCspPort]):
+        """Set CSP Process Ports
+
+        Parameters
+        ----------
+        csp_ports : ty.List[AbstractCspPort]
+
+        """
+        for port in csp_ports:
+            if isinstance(port, CspSendPort):
+                self.csp_proc_send_port.update({port.name: port})
+            if isinstance(port, CspRecvPort):
+                self.csp_proc_recv_port.update({port.name: port})
+
+    def build(self) -> NxSDKRuntimeService:
+        """Build NxSDK Runtime Service
+
+        Returns
+        -------
+        NxSDKRuntimeServiceBuilder
+        """
+        _ = executor_pb2.Empty()
+        nxExecutor = NxExecutor()
+        rs = self.rs_class(protocol=self.sync_protocol,
+                           nx_executor=nxExecutor,
+                           loihi_version=LoihiVersion.N3)
         rs.runtime_service_id = self._runtime_service_id
         rs.model_ids = self._model_ids
 

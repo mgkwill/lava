@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from lava.magma.core.resources import CPU, NeuroCore
 from lava.magma.core.sync.protocol import AbstractSyncProtocol
 from lava.magma.runtime.mgmt_token_enums import enum_to_np
-from lava.magma.runtime.runtime_service import (
+from lava.magma.runtime.runtime_services.runtime_service import (
     LoihiPyRuntimeService,
     LoihiCRuntimeService,
 )

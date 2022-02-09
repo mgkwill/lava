@@ -17,7 +17,7 @@ from lava.magma.runtime.message_infrastructure.factory import \
     MessageInfrastructureFactory
 from lava.magma.runtime.mgmt_token_enums import enum_to_np, enum_equal, \
     MGMT_COMMAND, MGMT_RESPONSE
-from lava.magma.runtime.runtime_service import AsyncPyRuntimeService
+from lava.magma.runtime.runtime_services.runtime_service import AsyncPyRuntimeService
 
 if ty.TYPE_CHECKING:
     from lava.magma.core.process.process import AbstractProcess
