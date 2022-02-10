@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Intel Corporation
+# Copyright (C) 2022 Intel Corporation
 # SPDX-License-Identifier: BSD-3-Clause
 # See: https://spdx.org/licenses/
 import typing as ty
@@ -299,12 +299,12 @@ class NxSDKRuntimeService(NcRuntimeService):
         if loihi_version == LoihiVersion.N3:
             from nxsdk.arch.n3b.n3board import N3Board
             self.nx_executor.board = N3Board(id=0)
-        elif loihi_version == LoihiVersion.N2:          
+        elif loihi_version == LoihiVersion.N2:
             from nxsdk.arch.n2a.n2board import N2Board
             self.nx_executor.board = N2Board(id=0)
         else:
-            raise ValueError('Unsupported Loihi version ' +
-                             'used in board selection')
+            raise ValueError('Unsupported Loihi version '
+                             + 'used in board selection')
 
         self.nx_executor.board.energyTimeMonitor.executor = self
 

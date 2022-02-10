@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Intel Corporation
+# Copyright (C) 2022 Intel Corporation
 # SPDX-License-Identifier: BSD-3-Clause
 # See: https://spdx.org/licenses/
 
@@ -13,7 +13,6 @@ from lava.magma.runtime.message_infrastructure.message_infrastructure_interface\
     import MessageInfrastructureInterface
 from lava.magma.runtime.runtime_services.enums import LoihiVersion
 from lava.magma.runtime.runtime_services.runtime_service import (
-    NxSDKRuntimeService,
     PyRuntimeService,
     AbstractRuntimeService,
     NcRuntimeService,

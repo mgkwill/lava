@@ -1,4 +1,6 @@
-from collections import namedtuple
+# Copyright (C) 2022 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+# See: https://spdx.org/licenses/
 from dataclasses import dataclass
 
 from lava.magma.core.resources import CPU, NeuroCore
