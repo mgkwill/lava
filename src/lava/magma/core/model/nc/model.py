@@ -12,6 +12,17 @@ class AbstractNodeGroup:
 
 
 class Net(ABC):
+    """Represents a collection of logical entities (Attribute Groups)
+    that consume resources on a NeuroCore.
+
+    * InputAxons
+    * Synapses
+    * DendriticAccumulator
+    * Compartments
+    * OutputAxons
+    * Synaptic pre traces
+    * Synaptic post traces
+    """
     def __init__(self):
         self.out_ax = AbstractNodeGroup()
         self.cx = AbstractNodeGroup()

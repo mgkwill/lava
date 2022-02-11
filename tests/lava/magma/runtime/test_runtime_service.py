@@ -103,6 +103,10 @@ class NxSDKTestRuntimeService(PyRuntimeService):
 
 
 class TestNxSDKRuntimeService(unittest.TestCase):
+
+    # ## See nxsdk/arch/n3b/graph/nodesets/tests/test_axon_map.py
+    # ## See nxsdk/driver/tests/test_read_write_opt.py
+
     def test_runtime_service_construction(self):
         sp = SimpleSyncProtocol()
         rs = SimplePyRuntimeService(protocol=sp)

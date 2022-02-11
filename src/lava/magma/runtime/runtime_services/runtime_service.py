@@ -280,21 +280,17 @@ class NxSDKRuntimeService(NcRuntimeService):
     ----------
     protocol: ty.Type[LoihiProtocol]
               Communication protocol used by NxSDKRuntimeService
-    nx_executor: NxExecutor
-                 Executor object from NxSDK that drives
-                 state transition in Loihi
     loihi_version: LoihiVersion
                    Version of Loihi Chip to use, N2 or N3
     """
 
     def __init__(self,
                  protocol: ty.Type[AbstractSyncProtocol],
-                 nx_executor: NxExecutor,
                  loihi_version: LoihiVersion = LoihiVersion.N3):
         super(NxSDKRuntimeService, self).__init__(
             protocol=protocol
         )
-        self.nx_executor = nx_executor
+        self.nx_executor = NxExecutor()
 
         if loihi_version == LoihiVersion.N3:
             from nxsdk.arch.n3b.n3board import N3Board
@@ -306,7 +302,7 @@ class NxSDKRuntimeService(NcRuntimeService):
             raise ValueError('Unsupported Loihi version '
                              + 'used in board selection')
 
-        self.nx_executor.board.energyTimeMonitor.executor = self
+        self.nx_executor.board.energyTimeMonitor.executor = self.nx_executor
 
     def __repr__(self):
         return f"Synchronizer : {self.__class__}, \
@@ -331,17 +327,3 @@ class NxSDKRuntimeService(NcRuntimeService):
         for i in range(len(self.service_to_process)):
             self.service_to_process[i].join()
             self.process_to_service[i].join()
-
-
-""" We need to get a board at some point:
-def _get_board(self, main_process):
-        backend = main_process.backend
-        if backend == Backend.N2:
-            from nxsdk.arch.n2a.n2board import N2Board
-            return N2Board(id=0)
-        elif backend == Backend.N3:
-            from nxsdk.arch.n3b.n3board import N3Board
-            return N3Board(id=0)
-        else:
-            raise ValueError('Unsupported backend')
-"""
