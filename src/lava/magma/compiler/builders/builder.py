@@ -503,7 +503,9 @@ class RuntimeServiceBuilder(AbstractRuntimeServiceBuilder):
             if isinstance(port, CspRecvPort):
                 self.csp_proc_recv_port.update({port.name: port})
 
-    def build(self) -> AbstractRuntimeService:
+    def build(self,
+              loihi_version: LoihiVersion = LoihiVersion.N3
+              ) -> AbstractRuntimeService:
         """Build the runtime service
 
         Returns
@@ -511,7 +513,11 @@ class RuntimeServiceBuilder(AbstractRuntimeServiceBuilder):
         A concreate instance of AbstractRuntimeService
         [PyRuntimeService or NxSDKRuntimeService]
         """
-        rs = self.rs_class(protocol=self.sync_protocol)
+        if isinstance(self.rs_class, NxSDKRuntimeService):
+            rs = self.rs_class(protocol=self.sync_protocol,
+                               loihi_version=loihi_version)
+        else:
+            rs = self.rs_class(protocol=self.sync_protocol)
         rs.runtime_service_id = self._runtime_service_id
         rs.model_ids = self._model_ids
 
