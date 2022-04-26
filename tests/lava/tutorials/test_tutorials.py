@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # See: https://spdx.org/licenses/
 
-"""Test tutorials"""
+"""Test tutorials."""
+
 
 import glob
 import os
 import platform
-import subprocess  # noqa: S404
 import tempfile
+import typing as ty
+import subprocess  # noqa: S404
 import unittest
 from test import support
 
@@ -19,11 +21,12 @@ import tutorials
 
 
 class TestTutorials(unittest.TestCase):
-    """Export notebook, execute to check for errors"""
+    """Export notebook, execute to check for errors."""
 
     system_name = platform.system().lower()
 
-    def _execute_notebook(self, base_dir, path):
+    def _execute_notebook(self, base_dir: str, path: str) -> \
+            ty.Tuple[ty.Type[nbformat.NotebookNode], ty.List[str]]:
         """Execute a notebook via nbconvert and collect output.
 
         Parameters
@@ -36,38 +39,15 @@ class TestTutorials(unittest.TestCase):
         Returns
         -------
         Tuple
-            (parsed nb object, execution errors)
+            (parsed nbformat.NotebookNode object, list of execution errors)
         """
 
         cwd = os.getcwd()
         dir_name, notebook = os.path.split(path)
         try:
-            os.chdir(base_dir + "/" + dir_name)
-
-            env = os.environ.copy()
-            module_path = [lava.__path__.__dict__["_path"][0]]
-            # Path: module path + parent dir of module + existing PYTHONPATH
-            module_path.extend(
-                [os.path.dirname(module_path[0]), env.get("PYTHONPATH", "")])
-            env["PYTHONPATH"] = ":".join(module_path)
-
-            with tempfile.NamedTemporaryFile(mode="w+t", suffix=".ipynb") \
-                    as fout:
-                args = ["jupyter", "nbconvert", "--to", "notebook", "--execute",
-                        "--ExecutePreprocessor.timeout=-1",
-                        "--output", fout.name, notebook]
-                subprocess.check_call(args, env=env)  # noqa: S603
-
-                fout.seek(0)
-                nb = nbformat.read(fout, nbformat.current_nbformat)
-
-            errors = []
-            for cell in nb.cells:
-                if 'outputs' in cell:
-                    for output in cell['outputs']:
-                        if output.output_type == 'error':
-                            errors.append(output)
-
+            env = self._update_pythonpath(base_dir, dir_name)
+            nb = self._convert_and_execute_notebook(notebook, env)
+            errors = self._collect_errors_from_all_cells(nb)
         except Exception as e:
             nb = None
             errors = str(e)
@@ -76,7 +56,82 @@ class TestTutorials(unittest.TestCase):
 
         return nb, errors
 
-    def _run_notebook(self, notebook, e2e_tutorial=False):
+    def _update_pythonpath(self, base_dir: str, dir_name: str) \
+            -> ty.Dict[str, str]:
+        """Update PYTHONPATH with notebook location.
+
+        Parameters
+        ----------
+        base_dir : str
+            Parent directory to use
+        dir_name : str
+            Directory containing notebook
+
+        Returns
+        -------
+        env : dict
+            Updated dictionary of environment variables
+        """
+        os.chdir(base_dir + "/" + dir_name)
+
+        env = os.environ.copy()
+        module_path = [lava.__path__.__dict__["_path"][0]]
+        # Path: module path + parent dir of module + existing PYTHONPATH
+        module_path.extend(
+            [os.path.dirname(module_path[0]), env.get("PYTHONPATH", "")])
+        env["PYTHONPATH"] = ":".join(module_path)
+        return env
+
+    def _convert_and_execute_notebook(self, notebook: str,
+                                      env: ty.Dict[str, str]) \
+            -> ty.Type[nbformat.NotebookNode]:
+        """Covert notebook and execute it.
+
+        Parameters
+        ----------
+        notebook : str
+            Notebook name
+        env : dict
+            Dictionary of environment variables
+
+        Returns
+        -------
+        nb : nbformat.NotebookNode
+            Notebook dict-like node with attribute-access
+        """
+        with tempfile.NamedTemporaryFile(mode="w+t", suffix=".ipynb") \
+                as fout:
+            args = ["jupyter", "nbconvert", "--to", "notebook", "--execute",
+                    "--ExecutePreprocessor.timeout=-1",
+                    "--output", fout.name, notebook]
+            subprocess.check_call(args, env=env)  # noqa: S603
+
+            fout.seek(0)
+            return nbformat.read(fout, nbformat.current_nbformat)
+
+    def _collect_errors_from_all_cells(self, nb: nbformat.NotebookNode) \
+            -> ty.List[str]:
+        """Collect errors from executed notebook.
+
+        Parameters
+        ----------
+        nb : nbformat.NotebookNode
+            Notebook to search for errors
+
+        Returns
+        -------
+        List
+            Collection of errors
+        """
+        errors = []
+        for cell in nb.cells:
+            if 'outputs' in cell:
+                for output in cell['outputs']:
+                    if output.output_type == 'error':
+                        errors.append(output)
+        return errors
+
+    def _run_notebook(self, notebook: str, e2e_tutorial: bool = False):
         """Run a specific notebook
 
         Parameters
@@ -87,17 +142,18 @@ class TestTutorials(unittest.TestCase):
             end to end tutorial, by default False
         """
         cwd = os.getcwd()
+        tutorials_temp_directory = \
+            tutorials.__path__.__dict__["_path"][0]
         tutorials_directory = ""
 
         if not e2e_tutorial:
-            tutorials_directory = \
-                os.path.realpath(tutorials.__path__.__dict__["_path"][0]
-                                 + "/in_depth")
+            tutorials_temp_directory = \
+                tutorials_temp_directory + "/in_depth"
         else:
-            tutorials_directory = \
-                os.path.realpath(tutorials.__path__.__dict__["_path"][0]
-                                 + "/end_to_end")
+            tutorials_temp_directory = \
+                tutorials_temp_directory + "/end_to_end"
 
+        tutorials_directory = os.path.realpath(tutorials_temp_directory)
         os.chdir(tutorials_directory)
 
         errors_record = {}
@@ -111,6 +167,7 @@ class TestTutorials(unittest.TestCase):
                             "Notebook not found. Input to function {}"
                             .format(notebook))
 
+            # If the notebook is found execute it and store any errors
             for notebook_name in discovered_notebooks:
                 nb, errors = self._execute_notebook(
                     str(tutorials_directory),
@@ -127,7 +184,8 @@ class TestTutorials(unittest.TestCase):
         finally:
             os.chdir(cwd)
 
-    @unittest.skipIf(system_name != "linux", "Tests work on linux")
+    @unittest.skipIf(system_name not in ("linux", "darwin"),
+                     "Tests work on linux, mac")
     def test_end_to_end_01_mnist(self):
         """Test tutorial end to end 01 mnist."""
         self._run_notebook(
@@ -142,28 +200,32 @@ class TestTutorials(unittest.TestCase):
             "tutorial01_installing_lava.ipynb"
         )
 
-    @unittest.skipIf(system_name != "linux", "Tests work on linux")
+    @unittest.skipIf(system_name not in ("linux", "darwin"),
+                     "Tests work on linux, mac")
     def test_in_depth_02_processes(self):
         """Test tutorial in depth processes"""
         self._run_notebook(
             "tutorial02_processes.ipynb"
         )
 
-    @unittest.skipIf(system_name != "linux", "Tests work on linux")
+    @unittest.skipIf(system_name not in ("linux", "darwin"),
+                     "Tests work on linux, mac")
     def test_in_depth_03_process_models(self):
         """Test tutorial in depth process models."""
         self._run_notebook(
             "tutorial03_process_models.ipynb"
         )
 
-    @unittest.skipIf(system_name != "linux", "Tests work on linux")
+    @unittest.skipIf(system_name not in ("linux", "darwin"),
+                     "Tests work on linux, mac")
     def test_in_depth_04__execution(self):
         """Test tutorial in depth execution."""
         self._run_notebook(
             "tutorial04_execution.ipynb"
         )
 
-    @unittest.skipIf(system_name != "linux", "Tests work on linux")
+    @unittest.skipIf(system_name not in ("linux", "darwin"),
+                     "Tests work on linux, mac")
     def test_in_depth_05__connect_processes(self):
         """Test tutorial in depth connect processes."""
         self._run_notebook(
@@ -178,7 +240,8 @@ class TestTutorials(unittest.TestCase):
             "tutorial06_hierarchical_processes.ipynb"
         )
 
-    @unittest.skipIf(system_name != "linux", "Tests work on linux")
+    @unittest.skipIf(system_name not in ("linux", "darwin"),
+                     "Tests work on linux, mac")
     def test_in_depth_07_remote_memory_access(self):
         """Test tutorial in depth remote memory access."""
         self._run_notebook(
